@@ -38,7 +38,10 @@ func Decompress(inputPath, outputPath string) error {
 		freq[ch] = int(f)
 	}
 
-	root := BuildTree(freq)
+	totalBytes := 0
+	for _, f := range freq {
+		totalBytes += f
+	}
 
 	outFile, err := os.Create(outputPath)
 	if err != nil {
@@ -46,12 +49,13 @@ func Decompress(inputPath, outputPath string) error {
 	}
 	defer outFile.Close()
 
-	br := NewBitReader(inFile)
-	totalBytes := 0
-	for _, f := range freq {
-		totalBytes += f
+	if totalBytes == 0 {
+		return nil
 	}
 
+	root := BuildTree(freq)
+
+	br := NewBitReader(inFile)
 	for i := 0; i < totalBytes; i++ {
 		node := root
 		for node.Left != nil || node.Right != nil {

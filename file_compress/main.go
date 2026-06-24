@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"file_compress/file_compress/huffman"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +27,7 @@ func runInteractive() {
 
 	fmt.Print("Input file path: ")
 	input, _ := r.ReadString('\n')
-	input = strings.TrimSpace(input)
+	input = cleanPath(input)
 
 	if _, err := os.Stat(input); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "error: file not found: %s\n", input)
@@ -51,7 +50,8 @@ func runInteractive() {
 
 	var output string
 	if mode == "compress" {
-		output = input + ".huf"
+		ext := filepath.Ext(input)
+		output = strings.TrimSuffix(input, ext) + ".huf"
 	} else {
 		ext := filepath.Ext(input)
 		output = strings.TrimSuffix(input, ext) + ".out"
@@ -59,7 +59,7 @@ func runInteractive() {
 
 	fmt.Printf("Output file path [%s]: ", output)
 	outStr, _ := r.ReadString('\n')
-	outStr = strings.TrimSpace(outStr)
+	outStr = cleanPath(outStr)
 	if outStr != "" {
 		output = outStr
 	}
@@ -122,57 +122,78 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-func runCmd(cmd string, args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	output := fs.String("o", "", "output file path (default: auto-generated)")
-	force := fs.Bool("f", false, "overwrite output file if exists")
+func parseArgs(args []string) (output, input string, force bool, err error) {
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "-o" || args[i] == "--output":
+			if i+1 >= len(args) {
+				return "", "", false, fmt.Errorf("-%s requires a value", args[i])
+			}
+			i++
+			output = args[i]
+		case args[i] == "-f" || args[i] == "--force":
+			force = true
+		default:
+			if input != "" {
+				return "", "", false, fmt.Errorf("unexpected argument: %s", args[i])
+			}
+			input = args[i]
+		}
+	}
+	return output, input, force, nil
+}
 
-	if err := fs.Parse(args); err != nil {
+func runCmd(cmd string, args []string, stdout, stderr io.Writer) int {
+	outputArg, input, force, err := parseArgs(args)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
-
-	if fs.NArg() < 1 {
+	if input == "" {
 		fmt.Fprintf(stderr, "usage: huffman %s [-o output] [-f] <input>\n", cmd)
 		return 2
 	}
-
-	input := fs.Arg(0)
 	if _, err := os.Stat(input); os.IsNotExist(err) {
 		fmt.Fprintf(stderr, "error: input file not found: %s\n", input)
 		return 1
 	}
 
-	outputPath := *output
+	outputPath := outputArg
 	if outputPath == "" {
+		ext := filepath.Ext(input)
 		if cmd == "compress" {
-			outputPath = input + ".huf"
+			outputPath = strings.TrimSuffix(input, ext) + ".huf"
 		} else {
-			ext := filepath.Ext(input)
 			outputPath = strings.TrimSuffix(input, ext) + ".out"
 		}
 	}
 
-	if !*force {
+	if !force {
 		if _, err := os.Stat(outputPath); err == nil {
 			fmt.Fprintf(stderr, "error: output file exists: %s (use -f to overwrite)\n", outputPath)
 			return 1
 		}
 	}
 
-	var err error
+	var err2 error
 	if cmd == "compress" {
-		err = huffman.Compress(input, outputPath)
+		err2 = huffman.Compress(input, outputPath)
 	} else {
-		err = huffman.Decompress(input, outputPath)
+		err2 = huffman.Decompress(input, outputPath)
 	}
-	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
+	if err2 != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err2)
 		return 1
 	}
 
 	fmt.Fprintf(stdout, "%s: %s -> %s OK\n", cmd, input, outputPath)
 	return 0
+}
+
+func cleanPath(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, `"`)
+	return s
 }
 
 func printUsage(w io.Writer) {

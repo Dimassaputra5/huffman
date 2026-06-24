@@ -17,9 +17,6 @@ func Compress(inputPath, outputPath string) error {
 		freq[b]++
 	}
 
-	root := BuildTree(freq)
-	codes := GenerateCodes(root)
-
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		return err
@@ -41,6 +38,12 @@ func Compress(inputPath, outputPath string) error {
 			return err
 		}
 	}
+	if len(data) == 0 {
+		return nil
+	}
+
+	root := BuildTree(freq)
+	codes := GenerateCodes(root)
 
 	bw := NewBitWriter(outFile)
 	for _, b := range data {

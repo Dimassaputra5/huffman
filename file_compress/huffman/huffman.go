@@ -29,6 +29,9 @@ func (pq *PriorityQueue) Pop() interface{} {
 }
 
 func BuildTree(freq map[byte]int) *Node {
+	if len(freq) == 0 {
+		return nil
+	}
 	pq := &PriorityQueue{}
 	heap.Init(pq)
 	keys := make([]byte, 0, len(freq))
